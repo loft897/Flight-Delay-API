@@ -10,9 +10,6 @@ from pydantic import BaseModel
 import pickle
 import pandas as pd
 from sklearn.preprocessing import OneHotEncoder
-# from keys import api_key
-api_key = os.environ.get('API_KEY')
-
 
 
 # Création de l'application FastAPI
@@ -26,6 +23,8 @@ with open("./assets/regressor.pkl", "rb") as f:
     regressor = pickle.load(f)
 
 # Définition des structures des données d'entrée
+
+
 class Flight(BaseModel):
     MONTH: int
     CARRIER_NAME: str
@@ -37,8 +36,11 @@ class Flight(BaseModel):
     CRS_ELAPSED_TIME: int
     ACTUAL_ELAPSED_TIME: int
 
+
 # route pour un message de bienvenue à l'adresse racine
 welcome_message = 'Bienvenue sur Flights Delays, votre compagnon de voyage!'
+
+
 @app.get("/")
 async def Welcome():
     return welcome_message
@@ -50,63 +52,64 @@ async def Welcome():
 airports_df = pd.read_csv("./assets/airports.csv")
 
 # Endpoint pour rechercher l'aeroport par son code
+
+
 @app.get("/airport/")
 async def get_airport_name(code: str):
     code = code.upper()
 
     # Rechercher l'aéroport correspondant dans le dataframe
     airport = airports_df.loc[airports_df['IATA_CODE'] == code]
-    
+
     # Vérifier si le code correspond à un aéroport existant
     if not airport.empty:
         iata_code = airport.iloc[0]['IATA_CODE']
         airport_name = airport.iloc[0]['AIRPORT']
         city = airport.iloc[0]['CITY']
-        
+        lat = airport.iloc[0]['LATITUDE']
+        lon = airport.iloc[0]['LONGITUDE']
+
         # Retourner les informations de l'aéroport
-        return {'iata_code': iata_code, 'airport': airport_name, 'city': city}
-    
+        return {'iata_code': iata_code, 'airport': airport_name, 'city': city, 'lat': lat, 'lon': lon}
+
     # Si le code ne correspond à aucun aéroport existant, retourner une erreur 404
     else:
-        raise HTTPException(status_code=404, detail="Airport not found, please check your airport code again!")
+        raise HTTPException(
+            status_code=404, detail="Airport not found, please check your airport code again!")
 
 
+# Endpoint pour calculer la distance en milles entre deux villes
 
-# Endpoint pour verifier si les conditions météoroliques sont favorables pour un vol
-api_key = api_key
+@app.get("/distance")
+async def get_weather(lat_origin: float, lon_origin: float, lat_dest: float, lon_dest: float):
+    try:
+        # Calculer la distance en miles entre les deux villes à l'aide de la formule de Haversine
+        from math import radians, cos, sin, asin, sqrt
 
-@app.get("/weather")
-async def get_weather(api_key: str, origine_city_name: str, dest_city_name: str, departure_date: str, departure_time: str, arrival_date: str, arrival_time: str):
-    # Convertir les dates et heures de départ et d'arrivée en timestamp UNIX
-    departure_timestamp = int(datetime.timestamp(datetime.strptime(f"{departure_date} {departure_time}", '%Y-%m-%d %H:%M')))
-    arrival_timestamp = int(datetime.timestamp(datetime.strptime(f"{arrival_date} {arrival_time}", '%Y-%m-%d %H:%M')))
-    
-    # Récupérer les informations météorologiques pour la ville de départ à la date et heure de départ
-    url = f"https://api.openweathermap.org/data/2.5/weather?q={origine_city_name}&appid={api_key}&dt={departure_timestamp}&lang=fr&units=metric"
-    # async with httpx.AsyncClient() as client:
-    #     response = await client.get(url)
-    response = requests.get(url)
-    data = response.json()
-    origine_weather = data
-    
-    # Récupérer les informations météorologiques pour la ville d'arrivée à la date et heure d'arrivée
-    url = f"https://api.openweathermap.org/data/2.5/weather?q={dest_city_name}&appid={api_key}&dt={arrival_timestamp}&lang=fr&units=metric"
-    # async with httpx.AsyncClient() as client:
-    #     response = await client.get(url)
-    response = requests.get(url)
-    data = response.json()
-    dest_weather = data
+        def distance(lat_origin, lon_origin, lat_dest, lon_dest):
+            """
+            Calcule la distance en miles entre deux points de coordonnées géographiques
+            """
+            # Convertir les coordonnées degrés en radians
+            lon_origin, lat_origin, lon_dest, lat_dest = map(
+                radians, [lon_origin, lat_origin, lon_dest, lat_dest])
 
-    # Vérifier si les conditions météorologiques sont acceptables pour le vol
-    if (origine_weather['main']['temp'] >= -20 and origine_weather['main']['temp'] <= 35 and dest_weather['main']['temp'] >= -20 and dest_weather['main']['temp'] <= 35 
-        and origine_weather['wind']['speed'] <= 65 and dest_weather['wind']['speed'] <= 65
-        # and ('rain' not in origine_weather or origine_weather['rain'].get('1h', 0) <= 10) and ('rain' not in dest_weather or dest_weather['rain'].get('1h', 0) <= 10)
-        # and ('snow' not in origine_weather or origine_weather['snow'].get('1h', 0) <= 10) and ('snow' not in dest_weather or dest_weather['snow'].get('1h', 0) <= 10)
-        and origine_weather['main']['humidity'] >= 50 and origine_weather['main']['humidity'] <= 85 and dest_weather['main']['humidity'] >= 50 and dest_weather['main']['humidity'] <= 85):
-        return 1
-    else:
+            # Calculer la distance en utilisant la formule de Haversine
+            dlon = lon_dest - lon_origin
+            dlat = lat_dest - lat_origin
+            a = sin(dlat / 2) ** 2 + cos(lat_origin) * \
+                cos(lat_dest) * sin(dlon / 2) ** 2
+            c = 2 * asin(sqrt(a))
+            km = 6367 * c
+            miles = km / 1.609344
+            return miles
+
+        distance_miles = f"{distance(lat_origin, lon_origin, lat_dest, lon_dest):.2f}"
+        return int(distance_miles)
+    except:
         return 0
-    
+
+
 @app.get("/comparison")
 async def predict_delay(airline: str, flight_number: int, position: int):
     position = 3
@@ -129,7 +132,8 @@ async def predict_delay(airline: str, flight_number: int, position: int):
         return JSONResponse(status_code=200, content={"error": "Error while obtaining data, please try again later!"})
 
     # Convertir les heures programmées et réelles en objets datetime
-    scheduled_time = datetime.strptime(results['scheduled_time'].split()[0], '%H:%M')
+    scheduled_time = datetime.strptime(
+        results['scheduled_time'].split()[0], '%H:%M')
     actual_time = datetime.strptime(results['actual_time'].split()[0], '%H:%M')
 
     # Calculer la durée en minutes
@@ -148,7 +152,6 @@ async def predict_delay(airline: str, flight_number: int, position: int):
     results['status'] = status
     return JSONResponse(status_code=200, content=results)
 
-    
 
 # Endpoint pour prédire si un vol est en retard ou pas et le delai de retard
 @app.post("/predict")
@@ -160,7 +163,8 @@ async def predict_delay(flight: Flight):
     ohe = OneHotEncoder(handle_unknown='ignore')
     ohe.fit(input_data[['CARRIER_NAME']])
     carrier_encoded = ohe.transform(input_data[['CARRIER_NAME']]).toarray()
-    input_data = np.concatenate((input_data.drop('CARRIER_NAME', axis=1), carrier_encoded), axis=1)
+    input_data = np.concatenate(
+        (input_data.drop('CARRIER_NAME', axis=1), carrier_encoded), axis=1)
 
     # Charger les modèles de ML
     with open("./assets/classifier.pkl", "rb") as f:
