@@ -10,7 +10,7 @@ from selenium.webdriver.remote.webelement import WebElement   # for autocompleti
 
 # Get the base URL from an environment variable or a file
 BASE_URL = os.environ.get('BASE_URL')
-from keys import BASE_URL
+# from keys import BASE_URL
 
 
 class ScrapDelay(webdriver.Chrome):
