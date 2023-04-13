@@ -80,7 +80,7 @@ async def get_airport_name(code: str):
 
 # Endpoint pour calculer la distance en milles entre deux villes
 
-@app.get("/distance")
+@app.get("/distance/")
 async def get_weather(lat_origin: float, lon_origin: float, lat_dest: float, lon_dest: float):
     try:
         # Calculer la distance en miles entre les deux villes à l'aide de la formule de Haversine
@@ -110,7 +110,7 @@ async def get_weather(lat_origin: float, lon_origin: float, lat_dest: float, lon
         return 0
 
 
-@app.get("/comparison")
+@app.get("/comparison/")
 async def predict_delay(airline: str, flight_number: int, position: int):
     position = 3
     from scraping.scrap_delay import ScrapDelay
