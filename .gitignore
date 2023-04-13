@@ -6,6 +6,12 @@ __pycache__/
 # C extensions
 *.so
 
+assets/flights_usa_2019.csv
+assets/flights_usa_2015.csv
+flights_usa_2015.csv
+keys.py
+scraping/constants.py
+
 # Distribution / packaging
 .Python
 build/
