@@ -34,7 +34,7 @@ class ScrapDelay(webdriver.Chrome):
             chrome_options.add_argument('--proxy-server={}'.format(self.proxy))
 
         super().__init__(options=chrome_options)
-        self.implicitly_wait(5)
+        self.implicitly_wait(1)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # Close the webdriver if teardown is True
@@ -44,13 +44,19 @@ class ScrapDelay(webdriver.Chrome):
     def land_first_page(self):
         # Load the first page
         self.get(BASE_URL)
+        try:
+            script = "var element = document.getElementsByClassName('onetrust-pc-dark-filter')[0]; element.parentNode.removeChild(element);"
+            self.execute_script(script)
+        except: pass
 
+
+# element = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, "id_de_votre_element")))
 
     def cookies(self):
         # Accept the website's cookies
         try:
             cook_choice = self.find_element(
-                By.ID, 'onetrust-close-btn-container')
+                By.CSS_SELECTOR, "button[class= 'onetrust-close-btn-handler']")
 
             cook_choice.click()
         except:
@@ -66,7 +72,7 @@ class ScrapDelay(webdriver.Chrome):
 
         field_search.send_keys(airline)
 
-        time.sleep(2)  # Wait for 2 seconds
+        time.sleep(1)  # Wait for 2 seconds
 
         try:
             list_container = self.find_element(By.CSS_SELECTOR, "div.basic-menu__MenuContainer-sc-eal1xr-0.dtessv")
@@ -92,7 +98,7 @@ class ScrapDelay(webdriver.Chrome):
         date = self.find_element(By.CSS_SELECTOR, "select[name='date']")
         date.click()
 
-        WebDriverWait(self, 3).until(EC.presence_of_element_located(
+        WebDriverWait(self, 1).until(EC.presence_of_element_located(
             (By.CSS_SELECTOR, "select[name='date'] option")))
 
         options = self.find_elements(By.CSS_SELECTOR, "select[name='date'] option")
@@ -100,7 +106,7 @@ class ScrapDelay(webdriver.Chrome):
 
     def search(self):
         # Click on the search button
-        search_elt = self.find_element(By.CSS_SELECTOR, "button[type='submit']")
+        search_elt = WebDriverWait(self, 1).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit']")))
         search_elt.click()
 
 
