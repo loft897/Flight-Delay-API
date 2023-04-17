@@ -9,32 +9,34 @@ import numpy as np
 from pydantic import BaseModel
 import pickle
 import pandas as pd
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.calibration import LabelEncoder
+import xgboost as xgb
 
 
 # Création de l'application FastAPI
 app = FastAPI()
 
-# Chargement des modèles
-with open("./assets/classifier.pkl", "rb") as f:
-    classifier = pickle.load(f)
 
-with open("./assets/regressor.pkl", "rb") as f:
-    regressor = pickle.load(f)
 
 # Définition des structures des données d'entrée
-
-
 class Flight(BaseModel):
     MONTH: int
+    DAY_OF_MONTH: int
     CARRIER_NAME: str
     CRS_DEP_TIME: int
-    DEP_TIME: float
-    ARR_TIME: float
-    ARR_DELAY_NEW: float
+    OP_UNIQUE_CARRIER: str
+    OP_CARRIER_FL_NUM: int
+    ORIGIN: str
+    DEST: str
     CRS_ARR_TIME: int
-    CRS_ELAPSED_TIME: int
-    ACTUAL_ELAPSED_TIME: int
+    CRS_ELAPSED_TIME: float
+    DISTANCE: float
+
+
+
 
 
 # route pour un message de bienvenue à l'adresse racine
@@ -142,11 +144,11 @@ async def predict_delay(airline: str, flight_number: int, position: int):
 
     # Définir le statut en fonction de la durée
     if duration == 0:
-        status = 'no delay'
+        status = 'On time'
     elif duration > 0:
-        status = 'delay'
+        status = 'Delayed'
     else:
-        status = 'in advance'
+        status = 'In advance'
 
     # Ajouter les nouvelles clés et valeurs au dictionnaire results
     results['duration'] = duration
@@ -154,29 +156,59 @@ async def predict_delay(airline: str, flight_number: int, position: int):
     return JSONResponse(status_code=200, content=results)
 
 
+
+
 # Endpoint pour prédire si un vol est en retard ou pas et le delai de retard
 @app.post("/predict")
 async def predict_delay(flight: Flight):
-    # Créer un DataFrame à partir de l'objet Flight
-    input_data = pd.DataFrame([flight.dict()])
-
-    # Encoder la feature CARRIER_NAME
-    ohe = OneHotEncoder(handle_unknown='ignore')
-    ohe.fit(input_data[['CARRIER_NAME']])
-    carrier_encoded = ohe.transform(input_data[['CARRIER_NAME']]).toarray()
-    input_data = np.concatenate(
-        (input_data.drop('CARRIER_NAME', axis=1), carrier_encoded), axis=1)
-
-    # Charger les modèles de ML
-    with open("./assets/classifier.pkl", "rb") as f:
+    results = {}  # Initialize an empty results dictionary
+    # Charger les modèles pré-entraînés
+    with open("./assets/xgb_model.pkl", "rb") as f:
         classifier = pickle.load(f)
-    with open("./assets/regressor.pkl", "rb") as f:
+
+    with open("./assets/xgb_reg_model.pkl", "rb") as f:
         regressor = pickle.load(f)
 
-    # Faire des prédictions avec les modèles
-    pred_class = classifier.predict(input_data)[0]
-    if pred_class == 0:
-        return {"Résultat: Il y'aurait pas de retard sur ce vol."}
+    # Charger le ColumnTransformer pré-entraîné
+    with open("./assets/preprocessor.pkl", "rb") as f:
+        preprocessor = pickle.load(f)
 
-    pred_delay = regressor.predict(input_data)[0]
-    return {"Résultat: Il y'aurait du retard sur ce vol de ", pred_delay, " minutes."}
+    # Créer un DataFrame à partir des caractéristiques fournies
+    input_data = pd.DataFrame.from_dict(flight.dict(), orient='index').T
+
+    # Réorganiser les colonnes dans le même ordre que lors de l'entraînement
+    input_data = input_data[['MONTH', 'DAY_OF_MONTH', 'OP_UNIQUE_CARRIER', 'OP_CARRIER_FL_NUM', 'ORIGIN', 'DEST', 'CRS_DEP_TIME', 'CRS_ARR_TIME', 'CRS_ELAPSED_TIME', 'DISTANCE', 'CARRIER_NAME']]
+
+    # Transformer les données d'entrée avec le ColumnTransformer pré-entraîné
+    input_data = preprocessor.transform(input_data)
+
+    # Faire des prédictions avec les modèles
+    pred_class = classifier.predict(input_data)
+    if pred_class == 0:
+        # Ajouter les nouvelles clés et valeurs au dictionnaire results
+        results['duration'] = 0
+        results['status'] = 'On time'
+        return JSONResponse(status_code=200, content=results)
+
+    else:
+        pred_delay = regressor.predict(input_data)
+        results['duration'] = pred_delay
+        results['status'] = 'Delayed'
+        return JSONResponse(status_code=200, content=results)
+
+
+
+
+
+    # a = [ MONTH: int
+    # DAY_OF_MONTH: int
+    # CARRIER_NAME: str
+    # CRS_DEP_TIME: int
+    # OP_UNIQUE_CARRIER: str
+    # OP_CARRIER_FL_NUM: int
+    # ORIGIN: str
+    # DEST: str
+    # CRS_DEP_TIME: int
+    # CRS_ARR_TIME: int
+    # CRS_ELAPSED_TIME: int
+    # DISTANCE: int]
