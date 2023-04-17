@@ -158,10 +158,10 @@ async def predict_delay(airline: str, flight_number: int, position: int):
 
 
 
-# Endpoint pour prédire si un vol est en retard ou pas et le delai de retard
-@app.post("/predict")
-async def predict_delay(flight: Flight):
+@app.get("/predict")
+async def predict_delay(MONTH: int, DAY_OF_MONTH: int, OP_UNIQUE_CARRIER: str, OP_CARRIER_FL_NUM: int, ORIGIN: str, DEST: str, CRS_DEP_TIME: int, CRS_ARR_TIME: int, CRS_ELAPSED_TIME: float, DISTANCE: float, CARRIER_NAME: str):
     results = {}  # Initialize an empty results dictionary
+
     # Charger les modèles pré-entraînés
     with open("./assets/xgb_model.pkl", "rb") as f:
         classifier = pickle.load(f)
@@ -174,10 +174,7 @@ async def predict_delay(flight: Flight):
         preprocessor = pickle.load(f)
 
     # Créer un DataFrame à partir des caractéristiques fournies
-    input_data = pd.DataFrame.from_dict(flight.dict(), orient='index').T
-
-    # Réorganiser les colonnes dans le même ordre que lors de l'entraînement
-    input_data = input_data[['MONTH', 'DAY_OF_MONTH', 'OP_UNIQUE_CARRIER', 'OP_CARRIER_FL_NUM', 'ORIGIN', 'DEST', 'CRS_DEP_TIME', 'CRS_ARR_TIME', 'CRS_ELAPSED_TIME', 'DISTANCE', 'CARRIER_NAME']]
+    input_data = pd.DataFrame(data=[[MONTH, DAY_OF_MONTH, OP_UNIQUE_CARRIER, OP_CARRIER_FL_NUM, ORIGIN, DEST, CRS_DEP_TIME, CRS_ARR_TIME, CRS_ELAPSED_TIME, DISTANCE, CARRIER_NAME]], columns=['MONTH', 'DAY_OF_MONTH', 'OP_UNIQUE_CARRIER', 'OP_CARRIER_FL_NUM', 'ORIGIN', 'DEST', 'CRS_DEP_TIME', 'CRS_ARR_TIME', 'CRS_ELAPSED_TIME', 'DISTANCE', 'CARRIER_NAME'])
 
     # Transformer les données d'entrée avec le ColumnTransformer pré-entraîné
     input_data = preprocessor.transform(input_data)
@@ -195,6 +192,8 @@ async def predict_delay(flight: Flight):
         results['duration'] = pred_delay
         results['status'] = 'Delayed'
         return JSONResponse(status_code=200, content=results)
+
+
 
 
 
